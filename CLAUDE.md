@@ -79,8 +79,14 @@ and its `CLAUDE.md` (repo maintenance docs don't belong on the site).
   `gh repo sync` on the fork no longer reaches the site by itself; upstream changes
   must be rsynced into `content/system-design/` and committed. See the README.
 - CI runs `git submodule update --remote content/leetcode-algorithms` before
-  building, so the site always publishes the newest solutions. The pointer committed
-  here is deliberately allowed to lag — don't treat a stale pointer as a bug.
+  building, so the site always publishes the newest solutions, then commits the
+  bumped pointer back to `main` after a successful deploy. That bot push does not
+  re-trigger the workflow — GitHub suppresses triggers for pushes made with the
+  default `GITHUB_TOKEN`. So the pointer in `main` normally names the LeetCode
+  commit that is live; if a concurrent push beat it, the step warns instead of
+  failing and the next run re-derives the bump.
+- Because CI commits to `main`, `git pull` before starting local work, or your
+  next push will be rejected as non-fast-forward.
 - Deploys run from GitHub Actions (`.github/workflows/deploy.yml`), **not** from
   Cloudflare's Git integration — don't also connect this repo in the Cloudflare
   dashboard, or every change builds twice.

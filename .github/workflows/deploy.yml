@@ -19,18 +19,32 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      # write is needed by "Record the submodule pointer" below, which commits the
+      # bumped gitlink back to main.
+      contents: write
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+          # Keep the token available to `git push` in the final step.
+          persist-credentials: true
 
-      # The pinned submodule commit is only a floor: the site should always
-      # publish the newest LeetCode solutions, including on a content-updated
-      # dispatch fired seconds after they landed. The pointer in this repo is
-      # deliberately not committed back — nothing here depends on it being current.
+      # The pinned commit is only a floor: the site should always publish the
+      # newest LeetCode solutions, including on a content-updated dispatch fired
+      # seconds after they landed.
       - name: Use the latest LeetCode content
-        run: git submodule update --remote --recursive content/leetcode-algorithms
+        id: leetcode
+        run: |
+          git submodule update --remote --recursive content/leetcode-algorithms
+          sha="$(git -C content/leetcode-algorithms rev-parse HEAD)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          if git diff --quiet -- content/leetcode-algorithms; then
+            echo "Submodule pointer already at ${sha:0:7}."
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Building with leetcode-algorithms ${sha:0:7} (pointer will be recorded after deploy)."
+            echo "bumped=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/setup-python@v7
         with:
@@ -47,3 +61,34 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy site --project-name=swe-site --branch=main
+
+      # Runs only after a successful deploy, so the recorded pointer always names
+      # the LeetCode commit that is actually live.
+      #
+      # This push does NOT re-trigger the workflow: GitHub suppresses workflow
+      # triggers for pushes made with the default GITHUB_TOKEN, so there is no loop.
+      - name: Record the submodule pointer
+        if: steps.leetcode.outputs.bumped == 'true' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add content/leetcode-algorithms
+          git commit -m "Bump leetcode-algorithms to ${SHA:0:7}"
+          # A concurrent push would reject this. The site is already deployed and
+          # the next run re-derives the bump, so warn rather than fail the job.
+          if ! git push; then
+            echo "::warning::Could not push the pointer bump — main moved while this ran. The deploy succeeded; the next run will record it."
+          fi
+        env:
+          SHA: ${{ steps.leetcode.outputs.sha }}
+
+      - name: Summary
+        run: |
+          {
+            echo "### Deploy"
+            echo
+            echo "- LeetCode submodule: \`${SHA:0:7}\`"
+            echo "- Pointer bumped: ${{ steps.leetcode.outputs.bumped }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          SHA: ${{ steps.leetcode.outputs.sha }}

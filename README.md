@@ -67,9 +67,10 @@ To pull new LeetCode solutions into your checkout:
 git submodule update --remote content/leetcode-algorithms
 ```
 
-The submodule pointer committed here is intentionally allowed to go stale — CI
-always builds the submodule's latest `main` (see below), so bumping the pointer is
-optional housekeeping rather than a release step.
+You rarely need to do this by hand: after a successful deploy, CI commits the
+bumped pointer back to `main` itself, so the recorded pointer names the LeetCode
+commit that is actually live. Pull before starting local work, or your next push
+will be rejected as non-fast-forward.
 
 ## CI/CD
 
@@ -77,8 +78,10 @@ Deploys are done by GitHub Actions (`.github/workflows/deploy.yml`), not by
 Cloudflare's Git integration — do **not** also connect the repo in the Cloudflare
 dashboard or every change would build twice. The workflow checks out submodules,
 runs `git submodule update --remote` on the LeetCode submodule so the newest
-solutions are published, builds the site, and uploads it with
-`wrangler pages deploy`. It runs on:
+solutions are published, builds the site, uploads it with `wrangler pages deploy`,
+and then commits the bumped submodule pointer back to `main`. That bot push does
+not re-trigger the workflow, because GitHub suppresses triggers for pushes made
+with the default `GITHUB_TOKEN`. It runs on:
 
 - pushes to `main` of this repo — which now covers every edit to the SWE, System
   Design and Real Interview Questions sections,
