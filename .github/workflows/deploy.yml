@@ -3,6 +3,15 @@ name: Build and deploy to Cloudflare Pages
 on:
   push:
     branches: [main]
+    # The "Record the submodule pointer" step pushes a commit touching only this
+    # path. Ignoring it stops that bot commit from starting a second, redundant
+    # build: a merge into leetcode-algorithms fired the dispatch, that run
+    # deployed and recorded the pointer, and its push then built everything a
+    # second time. Skipping is safe because the build resolves the submodule to
+    # its latest main regardless of the recorded pointer, so a pointer-only push
+    # can never change what gets published.
+    paths-ignore:
+      - content/leetcode-algorithms
   # leetcode-algorithms is a submodule under content/, so its own pushes do not
   # touch this repo. Its gitbook.yml workflow fires this dispatch instead, and
   # the build below pulls the submodule's latest main. The other three sections
@@ -65,15 +74,18 @@ jobs:
       # Runs only after a successful deploy, so the recorded pointer always names
       # the LeetCode commit that is actually live.
       #
-      # This push does NOT re-trigger the workflow: GitHub suppresses workflow
-      # triggers for pushes made with the default GITHUB_TOKEN, so there is no loop.
+      # Two independent guards stop this push from causing a second build: the
+      # paths-ignore above (for this workflow) and the [skip ci] marker below,
+      # which Cloudflare Pages also honours should the repo ever be Git-connected
+      # by mistake. Do not rely on GITHUB_TOKEN push-suppression alone — it covers
+      # only GitHub Actions, not third-party apps listening on the same webhook.
       - name: Record the submodule pointer
         if: steps.leetcode.outputs.bumped == 'true' && github.ref == 'refs/heads/main'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add content/leetcode-algorithms
-          git commit -m "Bump leetcode-algorithms to ${SHA:0:7}"
+          git commit -m "Bump leetcode-algorithms to ${SHA:0:7} [skip ci]"
           # A concurrent push would reject this. The site is already deployed and
           # the next run re-derives the bump, so warn rather than fail the job.
           if ! git push; then

@@ -80,11 +80,16 @@ and its `CLAUDE.md` (repo maintenance docs don't belong on the site).
   must be rsynced into `content/system-design/` and committed. See the README.
 - CI runs `git submodule update --remote content/leetcode-algorithms` before
   building, so the site always publishes the newest solutions, then commits the
-  bumped pointer back to `main` after a successful deploy. That bot push does not
-  re-trigger the workflow — GitHub suppresses triggers for pushes made with the
-  default `GITHUB_TOKEN`. So the pointer in `main` normally names the LeetCode
-  commit that is live; if a concurrent push beat it, the step warns instead of
-  failing and the next run re-derives the bump.
+  bumped pointer back to `main` after a successful deploy. So the pointer in
+  `main` normally names the LeetCode commit that is live; if a concurrent push
+  beat it, the step warns instead of failing and the next run re-derives the bump.
+- That bot push must not start another build, or every LeetCode merge deploys
+  twice. Two guards do it: `paths-ignore: [content/leetcode-algorithms]` on the
+  push trigger, and a `[skip ci]` marker in the commit message. Don't replace them
+  with `GITHUB_TOKEN` push-suppression — that only stops GitHub Actions, not other
+  apps on the same webhook, and it is what the double-build came from. Skipping is
+  safe: the build resolves the submodule to its latest `main` regardless of the
+  recorded pointer, so a pointer-only push cannot change what is published.
 - Because CI commits to `main`, `git pull` before starting local work, or your
   next push will be rejected as non-fast-forward.
 - Deploys run from GitHub Actions (`.github/workflows/deploy.yml`), **not** from

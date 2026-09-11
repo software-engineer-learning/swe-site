@@ -79,9 +79,10 @@ Cloudflare's Git integration — do **not** also connect the repo in the Cloudfl
 dashboard or every change would build twice. The workflow checks out submodules,
 runs `git submodule update --remote` on the LeetCode submodule so the newest
 solutions are published, builds the site, uploads it with `wrangler pages deploy`,
-and then commits the bumped submodule pointer back to `main`. That bot push does
-not re-trigger the workflow, because GitHub suppresses triggers for pushes made
-with the default `GITHUB_TOKEN`. It runs on:
+and then commits the bumped submodule pointer back to `main`. That bot commit
+touches only `content/leetcode-algorithms` and carries `[skip ci]`, and the push
+trigger ignores that path — otherwise recording the pointer would kick off a
+second, identical build of every LeetCode merge. It runs on:
 
 - pushes to `main` of this repo — which now covers every edit to the SWE, System
   Design and Real Interview Questions sections,
