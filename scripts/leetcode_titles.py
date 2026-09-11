@@ -67,8 +67,31 @@ def demote(lines):
     return out
 
 
+TAG = re.compile(r"<[^>]+>")
+
+
+def description_title(folder):
+    """The h1 of description.md, minus any <a> wrapper pasted in from LeetCode.
+
+    This is the authoritative human title: the SUMMARY labels are generated from
+    folder names by the submodule's tools/gen-summary.sh, so they lose hyphens and
+    get title-cased ("Sort Array By Increasing Frequency", "Unique 3 Digit").
+    """
+    description = folder / "description.md"
+    if not description.is_file():
+        return None
+    head = first_heading(description.read_text(encoding="utf-8").split("\n"))
+    if head is None or head[1] != 1:
+        return None
+    text = re.sub(r"\s+", " ", TAG.sub("", head[2])).strip()
+    return text if re.match(r"^\d+\.", text) else None
+
+
 def title_for(folder, label):
-    """Prefer the curated SUMMARY label; fall back to the folder name."""
+    """description.md's h1, else the SUMMARY label, else the folder name."""
+    from_description = description_title(folder)
+    if from_description:
+        return from_description
     if label and re.match(r"^\d+\.", label):
         return label
     m = FOLDER.match(folder.name)
@@ -131,6 +154,12 @@ def main(docs_root, summary_path):
             if already_titled:
                 heading_index = head[0]
                 kept += 1
+                # Several of these h1s were themselves derived from the folder name
+                # ("719. Find K th Smallest Pair Distance"). If the description
+                # carries the real LeetCode title, prefer it so both pages agree.
+                canonical = description_title(folder)
+                if canonical and canonical != head[2]:
+                    lines[heading_index] = f"# {canonical}"
             else:
                 lines = [f"# {title}", ""] + demote(lines)
                 heading_index = 0
